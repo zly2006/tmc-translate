@@ -57,12 +57,7 @@ class HybridTerminologyManager:
         for manager in self.active_managers:
             try:
                 # 对每个管理器单独处理搜索结果
-                if manager == self.minecraft_manager:
-                    # Minecraft管理器使用其内部的max_results限制
-                    terms = manager.search_terms(text, language)
-                else:
-                    # 其他管理器不受限制
-                    terms = manager.search_terms(text, language)
+                terms = manager.search_terms(text, language)
 
                 for term in terms:
                     # 使用英文名和中文名的组合作为唯一标识符
