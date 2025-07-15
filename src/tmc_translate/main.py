@@ -1,13 +1,11 @@
-import os
 import logging
-from typing import Optional, Union
+import os
+from typing import Optional
 
 import dotenv
 
-from .terminology_manager import TerminologyManager
-from .minecraft_language_manager import MinecraftLanguageManager
+from .hybrid_terminology_manager import HybridTerminologyManager
 from .rag_translator import RAGTranslator, OllamaProvider, GeminiProvider
-from .models import TranslationContext
 
 # 加载环境变量
 dotenv.load_dotenv()
@@ -24,34 +22,51 @@ class TranslationApp:
     """翻译应用主类"""
 
     def __init__(self):
-        self.terminology_manager: Optional[Union[TerminologyManager, MinecraftLanguageManager]] = None
+        self.terminology_manager: Optional[HybridTerminologyManager] = None
         self.translator: Optional[RAGTranslator] = None
         self.current_model_type: str = ""
-        self.terminology_type: str = ""  # 术语库类型
 
     def setup_terminology(self) -> bool:
         """设置术语库"""
         print("\n=== 术语库设置 ===")
+        print("现在支持同时使用两种术语库类型")
 
-        # 选择术语库类型
-        print("选择术语库类型:")
-        print("1. 标准术语库 (包含名称和描述)")
-        print("2. Minecraft语言文件 (JSON格式，仅包含名称对应)")
+        self.terminology_manager = HybridTerminologyManager()
 
-        type_choice = input("请选择术语库类型 (1-2): ").strip()
+        # 询问是否添加标准术语库
+        add_standard = input("是否添加标准术语库？(y/n): ").lower().strip()
+        if add_standard == 'y':
+            self._setup_standard_terminology()
 
-        if type_choice == "1":
-            return self._setup_standard_terminology()
-        elif type_choice == "2":
-            return self._setup_minecraft_language()
-        else:
-            print("❌ 无效选择")
+        # 询问是否添加Minecraft语言文件
+        add_minecraft = input("是否添加Minecraft语言文件？(y/n): ").lower().strip()
+        if add_minecraft == 'y':
+            self._setup_minecraft_language()
+
+        # 检查是否至少有一种术语库
+        if not self.terminology_manager.has_any_manager():
+            print("❌ 至少需要设置一种术语库")
             return False
+
+        # 显示设置结果
+        stats = self.terminology_manager.get_stats()
+        print(f"\n✅ 术语库设置完成:")
+        print(f"   - 总术语数: {stats['total_terms']} 个")
+        print(f"   - 活跃管理器: {stats['total_managers']} 个")
+
+        if stats['standard_manager']:
+            print(f"   - 标准术语库: {stats['standard_manager']['terms_count']} 个术语")
+
+        if stats['minecraft_manager']:
+            mc_stats = stats['minecraft_manager']
+            print(f"   - Minecraft语言文件: {mc_stats['terms_count']} 个术语")
+            print(f"     (阈值: {mc_stats['similarity_threshold']}, 最大结果: {mc_stats['max_results']})")
+
+        return True
 
     def _setup_standard_terminology(self) -> bool:
         """设置标准术语库"""
         print("\n--- 标准术语库设置 ---")
-        self.terminology_type = "标准术语库"
 
         # 检查是否有现有的术语库文件
         excel_files = [f for f in os.listdir('.') if f.endswith('.xlsx') or f.endswith('.xls')]
@@ -61,28 +76,21 @@ class TranslationApp:
             choice = input("选择术语库文件 (输入文件名) 或按回车创建示例文件: ").strip()
 
             if choice and choice in excel_files:
-                try:
-                    self.terminology_manager = TerminologyManager(choice)
-                    print(f"✅ 成功加载标准术语库: {len(self.terminology_manager.get_all_terms())} 个术语")
-                    return True
-                except Exception as e:
-                    print(f"❌ 加载术语库失败: {e}")
-                    return False
+                return self.terminology_manager.add_standard_terminology(choice)
 
         # 创建示例术语库
         sample_file = "sample_terminology.xlsx"
         try:
+            from .terminology_manager import TerminologyManager
             temp_manager = TerminologyManager()
             temp_manager.create_sample_excel(sample_file)
             print(f"✅ 已创建示例标准术语库: {sample_file}")
 
             use_sample = input("是否使用示例术语库？(y/n): ").lower().strip()
             if use_sample == 'y':
-                self.terminology_manager = TerminologyManager(sample_file)
-                print(f"✅ 使用示例标准术语库: {len(self.terminology_manager.get_all_terms())} 个术语")
-                return True
+                return self.terminology_manager.add_standard_terminology(sample_file)
             else:
-                print("请准备Excel术语库文件后重新运行程序")
+                print("跳过标准术语库设置")
                 return False
 
         except Exception as e:
@@ -92,7 +100,6 @@ class TranslationApp:
     def _setup_minecraft_language(self) -> bool:
         """设置Minecraft语言文件"""
         print("\n--- Minecraft语言文件设置 ---")
-        self.terminology_type = "Minecraft语言文件"
 
         # 检查是否有现有的JSON文件
         json_files = [f for f in os.listdir('.') if f.endswith('.json')]
@@ -105,27 +112,12 @@ class TranslationApp:
                 # 配置搜索参数
                 threshold = self._get_similarity_threshold()
                 max_results = self._get_max_results()
-
-                try:
-                    self.terminology_manager = MinecraftLanguageManager(
-                        choice,
-                        similarity_threshold=threshold
-                    )
-                    self.terminology_manager.set_max_results(max_results)
-
-                    stats = self.terminology_manager.get_stats()
-                    print(f"✅ 成功加载Minecraft语言文件:")
-                    print(f"   - 术语数量: {stats['total_terms']} 个")
-                    print(f"   - 相似度阈值: {stats['similarity_threshold']}")
-                    print(f"   - 最大结果数: {stats['max_results']}")
-                    return True
-                except Exception as e:
-                    print(f"❌ 加载Minecraft语言文件失败: {e}")
-                    return False
+                return self.terminology_manager.add_minecraft_language(choice, threshold, max_results)
 
         # 创建示例Minecraft语言文件
         sample_file = "minecraft_lang_zh_cn.json"
         try:
+            from .minecraft_language_manager import MinecraftLanguageManager
             temp_manager = MinecraftLanguageManager()
             temp_manager.create_sample_json(sample_file)
             print(f"✅ 已创建示例Minecraft语言文件: {sample_file}")
@@ -134,21 +126,9 @@ class TranslationApp:
             if use_sample == 'y':
                 threshold = self._get_similarity_threshold()
                 max_results = self._get_max_results()
-
-                self.terminology_manager = MinecraftLanguageManager(
-                    sample_file,
-                    similarity_threshold=threshold
-                )
-                self.terminology_manager.set_max_results(max_results)
-
-                stats = self.terminology_manager.get_stats()
-                print(f"✅ 使用示例Minecraft语言文件:")
-                print(f"   - 术语数量: {stats['total_terms']} 个")
-                print(f"   - 相似度阈值: {stats['similarity_threshold']}")
-                print(f"   - 最大结果数: {stats['max_results']}")
-                return True
+                return self.terminology_manager.add_minecraft_language(sample_file, threshold, max_results)
             else:
-                print("请准备Minecraft语言JSON文件后重新运行程序")
+                print("跳过Minecraft语言文件设置")
                 return False
 
         except Exception as e:
@@ -262,74 +242,106 @@ class TranslationApp:
         """显示主菜单"""
         print(f"\n=== TMC翻译系统 ===")
         print(f"当前模型: {self.current_model_type}")
-        print(f"术语库类型: {self.terminology_type}")
 
-        if hasattr(self.terminology_manager, 'get_stats'):
+        if self.terminology_manager:
             stats = self.terminology_manager.get_stats()
-            print(f"术语库: {stats['total_terms']} 个术语 (阈值: {stats['similarity_threshold']}, 最大结果: {stats['max_results']})")
-        else:
-            print(f"术语库: {len(self.terminology_manager.get_all_terms())} 个术语")
+            print(f"术语库: {stats['total_terms']} 个术语 ({stats['total_managers']} 个管理器)")
+
+            if stats['standard_manager']:
+                print(f"  - 标准术语库: {stats['standard_manager']['terms_count']} 个")
+
+            if stats['minecraft_manager']:
+                mc_stats = stats['minecraft_manager']
+                print(f"  - Minecraft语言: {mc_stats['terms_count']} 个 (阈值: {mc_stats['similarity_threshold']})")
 
         print("\n选项:")
         print("1. 翻译文本")
         print("2. 查看术语库")
-        print("3. 重新加载术语库")
-        print("4. 调整搜索参数 (仅Minecraft语言文件)")
+        print("3. 管理术语库")
+        print("4. 调整Minecraft搜索参数")
         print("5. 切换模型")
         print("6. 退出")
 
-    def translate_text(self) -> None:
-        """翻译文本交互"""
-        print("\n=== 文本翻译 ===")
-        print("输入要翻译的文本 (输入 'back' 返回主菜单):")
+    def manage_terminology(self) -> None:
+        """管理术语库"""
+        print("\n=== 术语库管理 ===")
 
-        while True:
-            text = input("\n> ").strip()
-
-            if text.lower() == 'back':
-                break
-
-            if not text:
-                print("请输入有效文本")
-                continue
-
-            try:
-                print("🔄 翻译中...")
-                context = self.translator.translate(text)
-
-                print(f"\n📄 原文: {context.source_text}")
-                print(f"🔄 译文: {context.translation_result}")
-
-                if context.relevant_terms:
-                    print(f"\n📚 相关术语 ({len(context.relevant_terms)} 个):")
-                    for i, term in enumerate(context.relevant_terms[:5], 1):  # 只显示前5个
-                        print(f"  {i}. {term.english_name} ↔ {term.chinese_name}")
-
-            except Exception as e:
-                print(f"❌ 翻译失败: {e}")
-
-    def show_terminology(self) -> None:
-        """显示术语库"""
-        print("\n=== 术语库 ===")
-        terms = self.terminology_manager.get_all_terms()
-
-        if not terms:
-            print("术语库为空")
+        if not self.terminology_manager:
+            print("❌ 未初始化术语管理器")
             return
 
-        print(f"共 {len(terms)} 个术语:")
-        for i, term in enumerate(terms, 1):
-            print(f"\n{i}. {term.english_name} | {term.chinese_name}")
-            if term.english_description:
-                print(f"   EN: {term.english_description}")
-            if term.chinese_description:
-                print(f"   CN: {term.chinese_description}")
+        stats = self.terminology_manager.get_stats()
+        print(f"当前状态:")
+        print(f"  - 总术语数: {stats['total_terms']} 个")
+        print(f"  - 标准术语库: {'已加载' if stats['standard_manager'] else '未加载'}")
+        print(f"  - Minecraft语言: {'已加载' if stats['minecraft_manager'] else '未加载'}")
 
-            if i >= 10:  # 只显示前10个，避免输出过长
-                remaining = len(terms) - 10
-                if remaining > 0:
-                    print(f"\n... 还有 {remaining} 个术语")
-                break
+        print("\n管理选项:")
+        print("1. 添加/重新加载标准术语库")
+        print("2. 添加/重新加载Minecraft语言文件")
+        print("3. 移除标准术语库")
+        print("4. 移除Minecraft语言文件")
+        print("5. 返回主菜单")
+
+        choice = input("请选择 (1-5): ").strip()
+
+        if choice == "1":
+            if self.terminology_manager.has_standard_manager():
+                self.terminology_manager.remove_standard_terminology()
+            self._setup_standard_terminology()
+        elif choice == "2":
+            if self.terminology_manager.has_minecraft_manager():
+                self.terminology_manager.remove_minecraft_language()
+            self._setup_minecraft_language()
+        elif choice == "3":
+            if self.terminology_manager.remove_standard_terminology():
+                print("✅ 标准术语库已移除")
+            else:
+                print("❌ 没有标准术语库可移除")
+        elif choice == "4":
+            if self.terminology_manager.remove_minecraft_language():
+                print("✅ Minecraft语言文件已移除")
+            else:
+                print("❌ 没有Minecraft语言文件可移除")
+        elif choice == "5":
+            return
+
+        # 更新翻译器
+        if self.translator and self.terminology_manager.has_any_manager():
+            self.translator.terminology_manager = self.terminology_manager
+            self.translator.refresh_vector_store()
+            print("✅ 翻译器已更新")
+
+    def adjust_search_parameters(self) -> None:
+        """调整Minecraft搜索参数"""
+        if not self.terminology_manager or not self.terminology_manager.has_minecraft_manager():
+            print("❌ 此功能需要加载Minecraft语言文件")
+            return
+
+        print("\n=== 调整Minecraft搜索参数 ===")
+        stats = self.terminology_manager.get_stats()
+        mc_stats = stats['minecraft_manager']
+
+        print(f"当前设置:")
+        print(f"  - 相似度阈值: {mc_stats['similarity_threshold']}")
+        print(f"  - 最大结果数: {mc_stats['max_results']}")
+
+        # 调整相似度阈值
+        adjust_threshold = input("\n是否调整相似度阈值？(y/n): ").lower().strip()
+        if adjust_threshold == 'y':
+            new_threshold = self._get_similarity_threshold()
+            self.terminology_manager.set_minecraft_similarity_threshold(new_threshold)
+
+        # 调整最大结果数
+        adjust_max = input("是否调整最大结果数？(y/n): ").lower().strip()
+        if adjust_max == 'y':
+            new_max = self._get_max_results()
+            self.terminology_manager.set_minecraft_max_results(new_max)
+
+        updated_stats = self.terminology_manager.get_stats()['minecraft_manager']
+        print(f"\n✅ 参数已更新:")
+        print(f"  - 相似度阈值: {updated_stats['similarity_threshold']}")
+        print(f"  - 最大结果数: {updated_stats['max_results']}")
 
     def reload_terminology(self) -> None:
         """重新加载术语库"""
@@ -341,40 +353,11 @@ class TranslationApp:
                 self.translator.refresh_vector_store()
                 print("✅ 术语库和向量存储已更新")
 
-    def adjust_search_parameters(self) -> None:
-        """调整搜索参数（仅适用于Minecraft语言文件）"""
-        if not isinstance(self.terminology_manager, MinecraftLanguageManager):
-            print("❌ 此功能仅适用于Minecraft语言文件")
-            return
-
-        print("\n=== 调整搜索参数 ===")
-        current_stats = self.terminology_manager.get_stats()
-        print(f"当前设置:")
-        print(f"  - 相似度阈值: {current_stats['similarity_threshold']}")
-        print(f"  - 最大结果数: {current_stats['max_results']}")
-
-        # 调整相似度阈值
-        adjust_threshold = input("\n是否调整相似度阈值？(y/n): ").lower().strip()
-        if adjust_threshold == 'y':
-            new_threshold = self._get_similarity_threshold()
-            self.terminology_manager.set_similarity_threshold(new_threshold)
-
-        # 调整最大结果数
-        adjust_max = input("是否调整最大结果数？(y/n): ").lower().strip()
-        if adjust_max == 'y':
-            new_max = self._get_max_results()
-            self.terminology_manager.set_max_results(new_max)
-
-        updated_stats = self.terminology_manager.get_stats()
-        print(f"\n✅ 参数已更新:")
-        print(f"  - 相似度阈值: {updated_stats['similarity_threshold']}")
-        print(f"  - 最大结果数: {updated_stats['max_results']}")
-
     def run(self) -> None:
         """运行应用"""
         print("🌟 欢迎使用TMC翻译系统!")
         print("这是一个基于RAG的中英文术语翻译工具")
-        print("支持标准术语库(含描述)和Minecraft语言文件(高阈值搜索)")
+        print("支持同时使用标准术语库和Minecraft语言文件")
 
         # 设置术语库
         if not self.setup_terminology():
@@ -397,7 +380,7 @@ class TranslationApp:
                 elif choice == "2":
                     self.show_terminology()
                 elif choice == "3":
-                    self.reload_terminology()
+                    self.manage_terminology()
                 elif choice == "4":
                     self.adjust_search_parameters()
                 elif choice == "5":
