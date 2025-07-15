@@ -52,7 +52,7 @@ class MinecraftLanguageManager:
                 if not english_key or not chinese_value:
                     continue
 
-                english_name = str(english_key).strip()
+                english_name = str(english_key).strip().replace("_", " ").replace(".", " ")
                 chinese_name = str(chinese_value).strip()
 
                 # 去重检查

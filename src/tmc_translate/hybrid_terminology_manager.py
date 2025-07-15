@@ -56,7 +56,14 @@ class HybridTerminologyManager:
 
         for manager in self.active_managers:
             try:
-                terms = manager.search_terms(text, language)
+                # 对每个管理器单独处理搜索结果
+                if manager == self.minecraft_manager:
+                    # Minecraft管理器使用其内部的max_results限制
+                    terms = manager.search_terms(text, language)
+                else:
+                    # 其他管理器不受限制
+                    terms = manager.search_terms(text, language)
+
                 for term in terms:
                     # 使用英文名和中文名的组合作为唯一标识符
                     term_key = (term.english_name.lower(), term.chinese_name)
@@ -66,13 +73,7 @@ class HybridTerminologyManager:
             except Exception as e:
                 logger.warning(f"搜索术语时出错 ({type(manager).__name__}): {e}")
 
-        # 如果有Minecraft管理器，按其设置限制总结果数
-        if self.minecraft_manager and self.minecraft_manager in self.active_managers:
-            max_results = self.minecraft_manager.max_results
-            if len(all_terms) > max_results:
-                all_terms = all_terms[:max_results]
-                logger.info(f"结果已限制为 {max_results} 个术语（Minecraft管理器设置）")
-
+        # 不再对总结果数进行额外限制，让各管理器自行控制
         logger.info(f"混合搜索找到 {len(all_terms)} 个相关术语")
         return all_terms
 

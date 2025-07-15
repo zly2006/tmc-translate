@@ -61,35 +61,7 @@ class TranslationApp:
     def _setup_standard_terminology(self) -> bool:
         """设置标准术语库"""
         print("\n--- 标准术语库设置 ---")
-
-        # 检查是否有现有的术语库文件
-        excel_files = [f for f in os.listdir('.') if f.endswith('.xlsx') or f.endswith('.xls')]
-
-        if excel_files:
-            print(f"发现Excel文件: {', '.join(excel_files)}")
-            choice = input("选择术语库文件 (输入文件名) 或按回车创建示例文件: ").strip()
-
-            if choice and choice in excel_files:
-                return self.terminology_manager.add_standard_terminology(choice)
-
-        # 创建示例术语库
-        sample_file = "sample_terminology.xlsx"
-        try:
-            from .terminology_manager import TerminologyManager
-            temp_manager = TerminologyManager()
-            temp_manager.create_sample_excel(sample_file)
-            print(f"✅ 已创建示例标准术语库: {sample_file}")
-
-            use_sample = input("是否使用示例术语库？(y/n): ").lower().strip()
-            if use_sample == 'y':
-                return self.terminology_manager.add_standard_terminology(sample_file)
-            else:
-                print("跳过标准术语库设置")
-                return False
-
-        except Exception as e:
-            print(f"❌ 创建示例术语库失败: {e}")
-            return False
+        return self.terminology_manager.add_standard_terminology('terminology.xlsx')
 
     def _setup_minecraft_language(self) -> bool:
         """设置Minecraft语言文件"""
