@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from typing import Optional
 
 import dotenv
@@ -33,15 +34,8 @@ class TranslationApp:
 
         self.terminology_manager = HybridTerminologyManager()
 
-        # 询问是否添加标准术语库
-        add_standard = input("是否添加标准术语库？(y/n): ").lower().strip()
-        if add_standard == 'y':
-            self._setup_standard_terminology()
-
-        # 询问是否添加Minecraft语言文件
-        add_minecraft = input("是否添加Minecraft语言文件？(y/n): ").lower().strip()
-        if add_minecraft == 'y':
-            self._setup_minecraft_language()
+        self._setup_standard_terminology()
+        self._setup_minecraft_language()
 
         # 检查是否至少有一种术语库
         if not self.terminology_manager.has_any_manager():
@@ -101,39 +95,9 @@ class TranslationApp:
         """设置Minecraft语言文件"""
         print("\n--- Minecraft语言文件设置 ---")
 
-        # 检查是否有现有的JSON文件
-        json_files = [f for f in os.listdir('.') if f.endswith('.json')]
-
-        if json_files:
-            print(f"发现JSON文件: {', '.join(json_files)}")
-            choice = input("选择Minecraft语言文件 (输入文件名) 或按回车创建示例文件: ").strip()
-
-            if choice and choice in json_files:
-                # 配置搜索参数
-                threshold = self._get_similarity_threshold()
-                max_results = self._get_max_results()
-                return self.terminology_manager.add_minecraft_language(choice, threshold, max_results)
-
-        # 创建示例Minecraft语言文件
-        sample_file = "minecraft_lang_zh_cn.json"
-        try:
-            from .minecraft_language_manager import MinecraftLanguageManager
-            temp_manager = MinecraftLanguageManager()
-            temp_manager.create_sample_json(sample_file)
-            print(f"✅ 已创建示例Minecraft语言文件: {sample_file}")
-
-            use_sample = input("是否使用示例语言文件？(y/n): ").lower().strip()
-            if use_sample == 'y':
-                threshold = self._get_similarity_threshold()
-                max_results = self._get_max_results()
-                return self.terminology_manager.add_minecraft_language(sample_file, threshold, max_results)
-            else:
-                print("跳过Minecraft语言文件设置")
-                return False
-
-        except Exception as e:
-            print(f"❌ 创建示例Minecraft语言文件失败: {e}")
-            return False
+        threshold = self._get_similarity_threshold()
+        max_results = self._get_max_results()
+        return self.terminology_manager.add_minecraft_language("assets/zh_cn_lite.json", threshold, max_results)
 
     def _get_similarity_threshold(self) -> float:
         """获取相似度阈值设置"""
@@ -170,6 +134,13 @@ class TranslationApp:
     def setup_model(self) -> bool:
         """设置模型"""
         print("\n=== 模型设置 ===")
+        # check argv
+        if len(sys.argv) > 1:
+            if '--ollama' in sys.argv:
+                return self._setup_ollama()
+            elif '--gemini' in sys.argv:
+                return self._setup_gemini()
+
         print("支持的模型:")
         print("1. Ollama (本地运行)")
         print("2. Google Gemini (需要API Key)")
@@ -254,13 +225,24 @@ class TranslationApp:
                 mc_stats = stats['minecraft_manager']
                 print(f"  - Minecraft语言: {mc_stats['terms_count']} 个 (阈值: {mc_stats['similarity_threshold']})")
 
+        # 显示向量存储状态
+        if self.translator and self.translator.vector_store:
+            try:
+                existing_ids = self.translator._get_existing_term_ids()
+                print(f"向量存储: {len(existing_ids)} 个文档已索引")
+            except:
+                print("向量存储: 已初始化")
+        else:
+            print("向量存储: 未初始化")
+
         print("\n选项:")
         print("1. 翻译文本")
         print("2. 查看术语库")
         print("3. 管理术语库")
         print("4. 调整Minecraft搜索参数")
-        print("5. 切换模型")
-        print("6. 退出")
+        print("5. 管理向量存储")
+        print("6. 切换模型")
+        print("7. 退出")
 
     def manage_terminology(self) -> None:
         """管理术语库"""
@@ -312,6 +294,59 @@ class TranslationApp:
             self.translator.refresh_vector_store()
             print("✅ 翻译器已更新")
 
+    def translate_text(self) -> None:
+                """翻译文本交互"""
+                print("\n=== 文本翻译 ===")
+                print("输入要翻译的文本 (输入 'back' 返回主菜单):")
+
+                while True:
+                    text = input("\n> ").strip()
+
+                    if text.lower() == 'back':
+                        break
+
+                    if not text:
+                        print("请输入有效文本")
+                        continue
+
+                    try:
+                        print("🔄 翻译中...")
+                        context = self.translator.translate(text)
+
+                        print(f"\n📄 原文: {context.source_text}")
+                        print(f"🔄 译文: {context.translation_result}")
+
+                        if context.relevant_terms:
+                            print(f"\n📚 相关术语 ({len(context.relevant_terms)} 个):")
+                            for i, term in enumerate(context.relevant_terms[:5], 1):  # 只显示前5个
+                                print(f"  {i}. {term.english_name} ↔ {term.chinese_name}")
+
+                    except Exception as e:
+                        print(f"❌ 翻译失败: {e}")
+
+    def show_terminology(self) -> None:
+                """显示术语库"""
+                print("\n=== 术语库 ===")
+                terms = self.terminology_manager.get_all_terms()
+
+                if not terms:
+                    print("术语库为空")
+                    return
+
+                print(f"共 {len(terms)} 个术语:")
+                for i, term in enumerate(terms, 1):
+                    print(f"\n{i}. {term.english_name} | {term.chinese_name}")
+                    if term.english_description:
+                        print(f"   EN: {term.english_description}")
+                    if term.chinese_description:
+                        print(f"   CN: {term.chinese_description}")
+
+                    if i >= 10:  # 只显示前10个，避免输出过长
+                        remaining = len(terms) - 10
+                        if remaining > 0:
+                            print(f"\n... 还有 {remaining} 个术语")
+                        break
+
     def adjust_search_parameters(self) -> None:
         """调整Minecraft搜索参数"""
         if not self.terminology_manager or not self.terminology_manager.has_minecraft_manager():
@@ -353,11 +388,124 @@ class TranslationApp:
                 self.translator.refresh_vector_store()
                 print("✅ 术语库和向量存储已更新")
 
+    def manage_vector_store(self) -> None:
+        """管理向量存储"""
+        print("\n=== 向量存储管理 ===")
+
+        if not self.translator:
+            print("❌ 翻译器未初始化")
+            return
+
+        # 显示当前状态
+        if self.translator.vector_store:
+            try:
+                existing_ids = self.translator._get_existing_term_ids()
+                print(f"当前状态: 已索引 {len(existing_ids)} 个文档")
+
+                # 检查向量存储目录大小
+                import os
+                if os.path.exists("./chroma_db"):
+                    total_size = sum(
+                        os.path.getsize(os.path.join(dirpath, filename))
+                        for dirpath, dirnames, filenames in os.walk("./chroma_db")
+                        for filename in filenames
+                    )
+                    size_mb = total_size / (1024 * 1024)
+                    print(f"存储大小: {size_mb:.2f} MB")
+            except Exception as e:
+                print(f"状态检查失败: {e}")
+        else:
+            print("当前状态: 向量存储未初始化")
+
+        print("\n管理选项:")
+        print("1. 增量更新向量存储")
+        print("2. 强制重建向量存储")
+        print("3. 清空向量存储")
+        print("4. 查看向量存储统计")
+        print("5. 返回主菜单")
+
+        choice = input("请选择 (1-5): ").strip()
+
+        if choice == "1":
+            print("🔄 正在增量更新向量存储...")
+            self.translator._setup_vector_store()
+            print("✅ 向量存储更新完成")
+
+        elif choice == "2":
+            confirm = input("⚠️  强制重建将删除所有现有索引，是否继续？(y/n): ").lower().strip()
+            if confirm == 'y':
+                print("🔄 正在强制重建向量存储...")
+                self.translator.force_rebuild_vector_store()
+                print("✅ 向量存储重建完成")
+            else:
+                print("操作已取消")
+
+        elif choice == "3":
+            confirm = input("⚠️  这将删除所有向量索引，是否继续？(y/n): ").lower().strip()
+            if confirm == 'y':
+                if self.translator.clear_vector_store():
+                    print("✅ 向量存储已清空")
+                else:
+                    print("❌ 清空向量存储失败")
+            else:
+                print("操作已取消")
+
+        elif choice == "4":
+            self._show_vector_store_stats()
+
+        elif choice == "5":
+            return
+
+    def _show_vector_store_stats(self) -> None:
+        """显示向量存储统计信息"""
+        if not self.translator or not self.translator.vector_store:
+            print("❌ 向量存储未初始化")
+            return
+
+        try:
+            collection = self.translator.vector_store._collection
+            all_docs = collection.get()
+
+            total_docs = len(all_docs['ids']) if all_docs['ids'] else 0
+
+            # 统计文档类型
+            english_docs = 0
+            chinese_docs = 0
+
+            if all_docs and 'metadatas' in all_docs:
+                for metadata in all_docs['metadatas']:
+                    if metadata and 'type' in metadata:
+                        if metadata['type'] == 'english_term':
+                            english_docs += 1
+                        elif metadata['type'] == 'chinese_term':
+                            chinese_docs += 1
+
+            print(f"\n📊 向量存储统计:")
+            print(f"  - 总文档数: {total_docs}")
+            print(f"  - 英文术语文档: {english_docs}")
+            print(f"  - 中文术语文档: {chinese_docs}")
+
+            # 显示存储位置和大小
+            import os
+            if os.path.exists("./chroma_db"):
+                total_size = sum(
+                    os.path.getsize(os.path.join(dirpath, filename))
+                    for dirpath, dirnames, filenames in os.walk("./chroma_db")
+                    for filename in filenames
+                )
+                size_mb = total_size / (1024 * 1024)
+                print(f"  - 存储位置: ./chroma_db")
+                print(f"  - 存储大小: {size_mb:.2f} MB")
+
+        except Exception as e:
+            print(f"❌ 获取统计信息失败: {e}")
+
     def run(self) -> None:
         """运行应用"""
         print("🌟 欢迎使用TMC翻译系统!")
         print("这是一个基于RAG的中英文术语翻译工具")
         print("支持同时使用标准术语库和Minecraft语言文件")
+        print("✨ 新功能: 智能向量存储，避免重复索引")
 
         # 设置术语库
         if not self.setup_terminology():
@@ -373,7 +521,7 @@ class TranslationApp:
         while True:
             try:
                 self.show_menu()
-                choice = input("\n请选择 (1-6): ").strip()
+                choice = input("\n请选择 (1-7): ").strip()
 
                 if choice == "1":
                     self.translate_text()
@@ -384,9 +532,11 @@ class TranslationApp:
                 elif choice == "4":
                     self.adjust_search_parameters()
                 elif choice == "5":
+                    self.manage_vector_store()
+                elif choice == "6":
                     if self.setup_model():
                         print("✅ 模型切换成功")
-                elif choice == "6":
+                elif choice == "7":
                     print("👋 再见!")
                     break
                 else:

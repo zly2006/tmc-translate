@@ -1,10 +1,10 @@
 import json
-import pandas as pd
-from typing import List, Optional, Set, Tuple, Dict
-from .models import Term, SimpleTerm
 import logging
-from difflib import SequenceMatcher
 import re
+from difflib import SequenceMatcher
+from typing import List, Optional, Set, Tuple
+
+from .models import Term, SimpleTerm
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class MinecraftLanguageManager:
     """Minecraft语言管理器，处理大规模术语数据，支持高阈值搜索和去重"""
 
-    def __init__(self, json_path: Optional[str] = None, similarity_threshold: float = 0.8):
+    def __init__(self, json_path: Optional[str] = "assets/zh_cn.json", similarity_threshold: float = 0.8):
         self.terms: List[SimpleTerm] = []
         self.json_path = json_path
         self.similarity_threshold = similarity_threshold  # 相似度阈值
@@ -205,6 +205,7 @@ class MinecraftLanguageManager:
         for idx, similarity in top_matches:
             simple_term = self.terms[idx]
             term = simple_term.to_term()
+            term.chinese_description = "专有名词参考，不一定符合语境，请只在确定时使用，并调整书写格式"
             result_terms.append(term)
             logger.debug(f"找到术语: {simple_term} (相似度: {similarity:.3f})")
 
@@ -240,33 +241,3 @@ class MinecraftLanguageManager:
             logger.info(f"最大结果数已设置为: {max_results}")
         else:
             raise ValueError("最大结果数必须大于0")
-
-    def create_sample_json(self, output_path: str) -> None:
-        """创建示例Minecraft语言JSON文件"""
-        sample_data = {
-            "block.minecraft.stone": "石头",
-            "block.minecraft.dirt": "泥土",
-            "block.minecraft.grass_block": "草方块",
-            "block.minecraft.cobblestone": "圆石",
-            "block.minecraft.oak_wood": "橡木原木",
-            "item.minecraft.diamond": "钻石",
-            "item.minecraft.iron_ingot": "铁锭",
-            "item.minecraft.gold_ingot": "金锭",
-            "item.minecraft.stick": "木棒",
-            "item.minecraft.coal": "煤炭",
-            "entity.minecraft.zombie": "僵尸",
-            "entity.minecraft.skeleton": "骷髅",
-            "entity.minecraft.creeper": "苦力怕",
-            "entity.minecraft.spider": "蜘蛛",
-            "entity.minecraft.enderman": "末影人",
-            "biome.minecraft.forest": "森林",
-            "biome.minecraft.desert": "沙漠",
-            "biome.minecraft.ocean": "海洋",
-            "enchantment.minecraft.sharpness": "锋利",
-            "enchantment.minecraft.protection": "保护"
-        }
-
-        with open(output_path, 'w', encoding='utf-8') as file:
-            json.dump(sample_data, file, ensure_ascii=False, indent=2)
-
-        logger.info(f"示例Minecraft语言文件已创建: {output_path}")

@@ -1,6 +1,7 @@
 from typing import List, Optional, Dict, Any
 from abc import ABC, abstractmethod
 import logging
+import os
 from langchain_core.language_models import BaseLanguageModel
 from langchain_community.llms import Ollama
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -106,48 +107,174 @@ class RAGTranslator:
         self.translation_chain = self.translation_prompt | self.llm | StrOutputParser()
 
     def _setup_vector_store(self) -> None:
-        """设置向量存储"""
+        """设置向量存储，支持增量更新"""
         try:
-            # 将术语转换为文档
-            documents = []
-            for term in self.terminology_manager.get_all_terms():
-                # 创建英文文档
+            # 首先尝试加载已存在的向量存储
+            try:
+                self.vector_store = Chroma(
+                    embedding_function=self.embeddings,
+                    persist_directory="./chroma_db"
+                )
+                logger.info("成功加载已存在的向量存储")
+            except Exception:
+                # 如果加载失败，创建新的向量存储
+                self.vector_store = None
+                logger.info("未找到已存在的向量存储，将创建新的")
+
+            # 获取当前所有术语
+            all_terms = self.terminology_manager.get_all_terms()
+            if not all_terms:
+                logger.warning("术语库为空，无法更新向量存储")
+                return
+
+            # 如果向量存储存在，检查哪些术语需要更新
+            if self.vector_store:
+                existing_term_ids = self._get_existing_term_ids()
+                new_documents = self._get_new_documents(all_terms, existing_term_ids)
+
+                if new_documents:
+                    # 添加新文档
+                    self.vector_store.add_documents(new_documents)
+                    logger.info(f"向量存储增量更新完成，新增 {len(new_documents)} 个文档")
+                else:
+                    logger.info("向量存储已是最新，无需更新")
+            else:
+                # 创建全新的向量存储
+                documents = self._create_all_documents(all_terms)
+                if documents:
+                    self.vector_store = Chroma.from_documents(
+                        documents=documents,
+                        embedding=self.embeddings,
+                        persist_directory="./chroma_db"
+                    )
+                    logger.info(f"向量存储初始化完成，包含 {len(documents)} 个文档")
+
+        except Exception as e:
+            logger.error(f"向量存储设置失败: {e}")
+            self.vector_store = None
+
+    def _get_existing_term_ids(self) -> set:
+        """获取已存在的术语ID集合"""
+        try:
+            # 获取所有现有文档的term_id
+            collection = self.vector_store._collection
+            all_docs = collection.get()
+            existing_ids = set()
+
+            if all_docs and 'metadatas' in all_docs:
+                for metadata in all_docs['metadatas']:
+                    if metadata and 'term_id' in metadata:
+                        existing_ids.add(metadata['term_id'])
+
+            logger.debug(f"找到 {len(existing_ids)} 个已存在的术语ID")
+            return existing_ids
+
+        except Exception as e:
+            logger.warning(f"获取已存在术语ID失败: {e}")
+            return set()
+
+    def _get_new_documents(self, all_terms: list, existing_term_ids: set) -> list:
+        """获取需要新增的文档列表"""
+        new_documents = []
+
+        for term in all_terms:
+            # 生成术语ID
+            en_term_id = f"en_{term.english_name.replace(' ', '_').replace('.', '_').lower()}"
+            cn_term_id = f"cn_{term.chinese_name.replace(' ', '_').replace('.', '_')}"
+
+            # 检查英文文档是否已存在
+            if en_term_id not in existing_term_ids:
                 en_doc = Document(
                     page_content=f"{term.english_name}: {term.english_description}",
                     metadata={
                         "type": "english_term",
-                        "term_id": f"en_{term.english_name.replace(' ', '_')}",
+                        "term_id": en_term_id,
                         "english_name": term.english_name,
-                        "chinese_name": term.chinese_name
+                        "chinese_name": term.chinese_name,
+                        "content_hash": self._get_content_hash(term.english_name, term.english_description)
                     }
                 )
-                documents.append(en_doc)
+                new_documents.append(en_doc)
 
-                # 创建中文文档
+            # 检查中文文档是否已存在
+            if cn_term_id not in existing_term_ids:
                 cn_doc = Document(
                     page_content=f"{term.chinese_name}: {term.chinese_description}",
                     metadata={
                         "type": "chinese_term",
-                        "term_id": f"cn_{term.chinese_name}",
+                        "term_id": cn_term_id,
                         "english_name": term.english_name,
-                        "chinese_name": term.chinese_name
+                        "chinese_name": term.chinese_name,
+                        "content_hash": self._get_content_hash(term.chinese_name, term.chinese_description)
                     }
                 )
-                documents.append(cn_doc)
+                new_documents.append(cn_doc)
 
-            if documents:
-                self.vector_store = Chroma.from_documents(
-                    documents=documents,
-                    embedding=self.embeddings,
-                    persist_directory="./chroma_db"
-                )
-                logger.info(f"向量存储初始化完成，包含 {len(documents)} 个文档")
-            else:
-                logger.warning("术语库为空，无法初始化向量存储")
+        return new_documents
 
+    def _create_all_documents(self, all_terms: list) -> list:
+        """创建所有术语的文档列表"""
+        documents = []
+
+        for term in all_terms:
+            # 生成术语ID
+            en_term_id = f"en_{term.english_name.replace(' ', '_').replace('.', '_').lower()}"
+            cn_term_id = f"cn_{term.chinese_name.replace(' ', '_').replace('.', '_')}"
+
+            # 创建英文文档
+            en_doc = Document(
+                page_content=f"{term.english_name}: {term.english_description}",
+                metadata={
+                    "type": "english_term",
+                    "term_id": en_term_id,
+                    "english_name": term.english_name,
+                    "chinese_name": term.chinese_name,
+                    "content_hash": self._get_content_hash(term.english_name, term.english_description)
+                }
+            )
+            documents.append(en_doc)
+
+            # 创建中文文档
+            cn_doc = Document(
+                page_content=f"{term.chinese_name}: {term.chinese_description}",
+                metadata={
+                    "type": "chinese_term",
+                    "term_id": cn_term_id,
+                    "english_name": term.english_name,
+                    "chinese_name": term.chinese_name,
+                    "content_hash": self._get_content_hash(term.chinese_name, term.chinese_description)
+                }
+            )
+            documents.append(cn_doc)
+
+        return documents
+
+    def _get_content_hash(self, name: str, description: str) -> str:
+        """获取内容哈希值，用于检测内容变化"""
+        import hashlib
+        content = f"{name}:{description}"
+        return hashlib.md5(content.encode()).hexdigest()
+
+    def clear_vector_store(self) -> bool:
+        """清空向量存储"""
+        try:
+            if self.vector_store:
+                # 删除向量存储目录
+                import shutil
+                if os.path.exists("./chroma_db"):
+                    shutil.rmtree("./chroma_db")
+                self.vector_store = None
+                logger.info("向量存储已清空")
+                return True
         except Exception as e:
-            logger.error(f"向量存储初始化失败: {e}")
-            self.vector_store = None
+            logger.error(f"清空向量存储失败: {e}")
+        return False
+
+    def force_rebuild_vector_store(self) -> None:
+        """强制重建向量存储"""
+        logger.info("开始强制重建向量存储...")
+        self.clear_vector_store()
+        self._setup_vector_store()
 
     def _detect_language(self, text: str) -> str:
         """检测文本语言"""

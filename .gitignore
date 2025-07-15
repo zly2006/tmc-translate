@@ -5,8 +5,12 @@ build/
 dist/
 wheels/
 *.egg-info
+.idea
 
 # Virtual environments
 .venv
 .env
 chroma_db/
+
+
+sample_terminology.xlsx
