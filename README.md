@@ -1,172 +1,173 @@
-# TMC Translate - RAG翻译系统
+# TMC Translate - RAG Translation System
 
-基于LangChain的中英文术语翻译系统，使用RAG技术确保专业术语的准确翻译。
+A Chinese-English terminology translation system based on LangChain, using RAG technology to ensure accurate translation of professional terms.
 
-## 功能特性
+## Features
 
-- 🌐 **双向翻译**: 支持中文到英文和英文到中文的互相翻译
-- 📚 **术语库管理**: 从Excel文件加载术语库，确保专业术语翻译的准确性
-- 🤖 **多模型支持**: 支持Ollama本地模型和Google Gemini云端模型
-- 🔍 **RAG技术**: 使用向量数据库进行语义搜索，提供相关术语上下文
-- 💬 **交互式界面**: 提供友好的命令行交互界面
-- 📊 **Excel支持**: 支持从Excel文件读取术语库数据
+- 🌐 **Bidirectional Translation**: Supports mutual translation between Chinese and English
+- 📚 **Terminology Management**: Load terminology database from Excel files to ensure accurate professional term translation
+- 🤖 **Multi-Model Support**: Supports both Ollama local models and Google Gemini cloud models
+- 🔍 **RAG Technology**: Uses vector database for semantic search to provide relevant terminology context
+- 💬 **Interactive Interface**: Provides user-friendly command-line interactive interface
+- 📊 **Excel Support**: Supports reading terminology database from Excel files
 
-## 项目结构
+## Project Structure
 
 ```
 src/
 ├── tmc_translate/
-│   ├── __init__.py          # 包初始化
-│   ├── main.py              # 主程序和交互界面
-│   ├── models.py            # 数据模型定义
-│   ├── rag_translator.py    # RAG翻译器核心
-│   └── terminology_manager.py # 术语库管理器
+│   ├── __init__.py          # Package initialization
+│   ├── main.py              # Main program and interactive interface
+│   ├── models.py            # Data model definitions
+│   ├── rag_translator.py    # RAG translator core
+│   └── terminology_manager.py # Terminology manager
 ```
 
-## 安装
+## Installation
 
-项目使用uv进行依赖管理：
+The project uses uv for dependency management:
 
 ```bash
-# 克隆项目
+# Clone the project
 git clone <repository_url>
 cd tmc-translate
 
-# 使用uv安装依赖
+# Install dependencies using uv
 uv sync
 ```
 
-## 术语库格式
+## Terminology Database Format
 
-术语库应为Excel文件(.xlsx或.xls)，包含以下列：
+The terminology database should be an Excel file (.xlsx or .xls) containing the following columns:
 
-| 列名 | 说明 | 示例 |
-|------|------|------|
-| english_name | 英文术语名称 | Machine Learning |
-| chinese_name | 中文术语名称 | 机器学习 |
-| english_description | 英文描述 | A method of data analysis that automates analytical model building |
-| chinese_description | 中文描述 | 一种自动化分析模型构建的数据分析方法 |
+| Column Name | Description | Example |
+|-------------|-------------|---------|
+| english_name | English term name | Machine Learning |
+| chinese_name | Chinese term name | 机器学习 |
+| english_description | English description | A method of data analysis that automates analytical model building |
+| chinese_description | Chinese description | 一种自动化分析模型构建的数据分析方法 |
 
-## 使用方法
+## Usage
 
-### 1. 直接运行
+### 1. Direct Execution
 
 ```bash
-# 使用uv运行
+# Run using uv
 uv run tmc-translate
 
-# 或者激活虚拟环境后运行
+# Or activate virtual environment and run
 uv shell
 python -m tmc_translate.main
 ```
 
-### 2. 环境配置
+### 2. Environment Configuration
 
-创建`.env`文件（可选）：
+Create a `.env` file (optional):
 
 ```env
-# Google API Key for Gemini (可选，也可以在运行时输入)
+# Google API Key for Gemini (optional, can also be entered at runtime)
 GOOGLE_API_KEY=your_google_api_key_here
 
-# Ollama配置 (可选)
+# Ollama configuration (optional)
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=llama2
 ```
 
-### 3. 准备术语库
+### 3. Prepare Terminology Database
 
-- 程序首次运行时会创建示例术语库文件 `sample_terminology.xlsx`
-- 您也可以准备自己的Excel术语库文件，确保包含必需的列名
+- The program will create a sample terminology file `sample_terminology.xlsx` on first run
+- You can also prepare your own Excel terminology file, ensuring it contains the required column names
 
-### 4. 选择模型
+### 4. Model Selection
 
-程序支持两种模型：
+The program supports two types of models:
 
-#### Ollama (本地运行)
-- 需要先安装并运行Ollama服务
-- 推荐模型：llama2, qwen, baichuan等支持中文的模型
-- 优点：本地运行，数据安全，无需API Key
-- 缺点：需要本地计算资源
+#### Ollama (Local)
+- Requires Ollama service to be installed and running
+- Recommended models: llama2, qwen, baichuan and other Chinese-supporting models
+- Pros: Local execution, data security, no API key required
+- Cons: Requires local computing resources
 
-#### Google Gemini (云端)
-- 需要Google AI Studio的API Key
-- 推荐模型：gemini-pro, gemini-1.5-pro
-- 优点：性能强大，响应快速
-- 缺点：需要网络连接和API Key
+#### Google Gemini (Cloud)
+- Requires API key from Google AI Studio
+- Recommended models: gemini-pro, gemini-1.5-pro
+- Pros: Powerful performance, fast response
+- Cons: Requires network connection and API key
 
-## 主要功能
+## Main Functions
 
-### 1. 文本翻译
-- 自动检测源语言（中文/英文）
-- 智能匹配相关术语
-- 提供术语对照参考
-- 生成高质量翻译结果
+### 1. Text Translation
+- Automatic source language detection (Chinese/English)
+- Intelligent matching of relevant terminology
+- Provides terminology reference
+- Generates high-quality translation results
 
-### 2. 术语库管理
-- 查看所有术语
-- 重新加载术语库
-- 支持实时更新
+### 2. Terminology Management
+- View all terminology
+- Reload terminology database
+- Supports real-time updates
 
-### 3. 模型切换
-- 运行时切换不同模型
-- 支持参数调整
+### 3. Model Switching
+- Switch between different models at runtime
+- Supports parameter adjustments
 
-## 技术架构
+## Technical Architecture
 
-- **LangChain**: 核心框架，提供LLM集成和链式操作
-- **ChromaDB**: 向量数据库，用于术语语义搜索
-- **Pandas**: 数据处理，Excel文件读取
-- **dataclass**: 类型安全的数据模型
-- **dotenv**: 环境变量管理
+- **LangChain**: Core framework providing LLM integration and chain operations
+- **ChromaDB**: Vector database for terminology semantic search
+- **Pandas**: Data processing and Excel file reading
+- **dataclass**: Type-safe data models
+- **dotenv**: Environment variable management
 
-## 开发
+## Development
 
-### 添加新的模型提供者
+### Adding New Model Providers
 
-继承`ModelProvider`抽象基类：
+Inherit from the `ModelProvider` abstract base class:
 
 ```python
 from .rag_translator import ModelProvider
 
 class YourModelProvider(ModelProvider):
     def get_llm(self):
-        # 返回您的LLM实例
+        # Return your LLM instance
         pass
     
     def get_embeddings(self):
-        # 返回您的Embeddings实例
+        # Return your Embeddings instance
         pass
 ```
 
-### 扩展术语库格式
+### Extending Terminology Database Format
 
-修改`terminology_manager.py`中的`load_from_excel`方法以支持新的列格式。
+Modify the `load_from_excel` method in `terminology_manager.py` to support new column formats.
 
-## 常见问题
+## FAQ
 
-### Q: Ollama连接失败怎么办？
-A: 确保Ollama服务正在运行：
+### Q: What to do if Ollama connection fails?
+A: Make sure Ollama service is running:
 ```bash
 ollama serve
-ollama pull llama2  # 下载模型
+ollama pull llama2  # Download model
 ```
 
-### Q: Gemini API调用失败？
-A: 检查：
-- API Key是否正确
-- 网络连接是否正常
-- 是否有足够的API配额
+### Q: Gemini API call failed?
+A: Check:
+- Whether the API Key is correct
+- Whether the network connection is normal
+- Whether there is sufficient API quota
 
-### Q: 术语库加载失败？
-A: 检查Excel文件：
-- 文件格式是否正确(.xlsx或.xls)
-- 是否包含必需的列名
-- 数据是否有空值
+### Q: Terminology database loading failed?
+A: Check the Excel file:
+- Whether the file format is correct (.xlsx or .xls)
+- Whether it contains required column names
+- Whether there are null values in the data
 
-## 许可证
+## License
 
-[添加您的许可证信息]
+[CC-BY-SA-NC 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) - for [terminology.xlsx](terminology.xlsx).
+[AGPL-3.0](LICENSE_AGPL) - for the rest of the code.
 
-## 贡献
+## Contributing
 
-欢迎提交Issue和Pull Request！
+Issues and Pull Requests are welcome!
