@@ -16,12 +16,45 @@ A Chinese-English terminology translation system based on LangChain, using RAG t
 ```
 src/
 ├── tmc_translate/
-│   ├── __init__.py          # Package initialization
-│   ├── main.py              # Main program and interactive interface
-│   ├── models.py            # Data model definitions
-│   ├── rag_translator.py    # RAG translator core
-│   └── terminology_manager.py # Terminology manager
+│   ├── __init__.py                      # Package initialization
+│   ├── main.py                          # Main program and interactive interface
+│   ├── models.py                        # Data model definitions
+│   ├── rag_translator.py                # RAG translator core
+│   ├── terminology_manager.py           # Standard terminology manager (Excel-based)
+│   ├── minecraft_language_manager.py    # Minecraft language file manager (JSON-based)
+│   └── hybrid_terminology_manager.py    # Hybrid manager combining both terminology sources
+terminology.xlsx                         # Standard terminology database
 ```
+
+## Terminology Sources
+
+This project supports two types of terminology databases:
+
+### 1. Standard Terminology Database (Excel-based)
+- **File**: `terminology.xlsx`
+- **Format**: Excel files with structured columns
+- **Purpose**: Professional domain-specific terminology with detailed descriptions
+- **Features**:
+  - Rich metadata (English/Chinese names and descriptions)
+  - Professional terminology for specific domains
+  - High-quality curated translations
+  - Suitable for technical documentation and academic content
+
+### 2. Minecraft Language Database (JSON-based)
+- **File**: `assets/zh_cn_lite.json`
+- **Format**: JSON key-value pairs
+- **Purpose**: Large-scale gaming terminology and UI translations
+- **Features**:
+  - Massive vocabulary coverage (10,000+ terms)
+  - Gaming and interface terminology
+  - High-throughput similarity matching
+  - Optimized for gaming content translation
+
+The **Hybrid Terminology Manager** intelligently combines both sources, allowing users to benefit from:
+- Professional terminology accuracy from Excel databases
+- Comprehensive coverage from Minecraft language files
+- Automatic deduplication and relevance ranking
+- Flexible threshold-based matching
 
 ## Installation
 
@@ -29,7 +62,7 @@ The project uses uv for dependency management:
 
 ```bash
 # Clone the project
-git clone <repository_url>
+git clone https://github.com/zly2006/tmc-translate.git
 cd tmc-translate
 
 # Install dependencies using uv
@@ -40,12 +73,12 @@ uv sync
 
 The terminology database should be an Excel file (.xlsx or .xls) containing the following columns:
 
-| Column Name | Description | Example |
-|-------------|-------------|---------|
-| english_name | English term name | Machine Learning |
-| chinese_name | Chinese term name | 机器学习 |
+| Column Name         | Description         | Example                                                            |
+|---------------------|---------------------|--------------------------------------------------------------------|
+| english_name        | English term name   | Machine Learning                                                   |
+| chinese_name        | Chinese term name   | 机器学习                                                               |
 | english_description | English description | A method of data analysis that automates analytical model building |
-| chinese_description | Chinese description | 一种自动化分析模型构建的数据分析方法 |
+| chinese_description | Chinese description | 一种自动化分析模型构建的数据分析方法                                                 |
 
 ## Usage
 
